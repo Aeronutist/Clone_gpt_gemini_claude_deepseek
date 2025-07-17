@@ -7,7 +7,7 @@ A full-stack conversational AI app that mimics the capabilities of tools like **
 
 ## 🚀 Demo
 
-🔗 [Live App on Streamlit](https://your-streamlit-app-link)
+🔗 [Live App on Streamlit]( https://clonegptgeminiclaudedeepseek-3d3t2mr9rvvcfdbp7ljspj.streamlit.app/)
 
 ---
 
