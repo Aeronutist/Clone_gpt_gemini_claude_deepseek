@@ -7,6 +7,7 @@ from langchain.memory import ConversationBufferMemory
 from langchain_community.llms import HuggingFacePipeline
 import torch
 import os
+vectorstore.save_local("faiss_index")
 
 # Set page layout
 st.set_page_config(page_title="Claude/Gemini Clone", layout="wide")
