@@ -3,4 +3,4 @@ torch
 sentence-transformers
 faiss-cpu
 streamlit
-langchain
+langchain community 
