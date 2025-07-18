@@ -5,56 +5,75 @@ from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain.chains import ConversationalRetrievalChain
 from langchain.memory import ConversationBufferMemory
 from langchain_community.llms import HuggingFacePipeline
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain.document_loaders import TextLoader, PyPDFLoader
 import torch
 import os
-vectorstore.save_local("faiss_index")
 
 # Set page layout
 st.set_page_config(page_title="Claude/Gemini Clone", layout="wide")
 st.title("💬 Claude/Gemini Clone with Mistral + LangChain")
 
-# Define a cache directory for Hugging Face models
+# Cache directory for HuggingFace
 CACHE_DIR = "/tmp/huggingface_cache"
-os.makedirs(CACHE_DIR, exist_ok=True) # Ensure the directory exists
+os.makedirs(CACHE_DIR, exist_ok=True)
 
-# Get Hugging Face token from Streamlit secrets
-# This makes downloads more reliable and can help with rate limits
 HF_TOKEN = st.secrets.get("HF_TOKEN")
 
 @st.cache_resource
 def load_model():
-    """
-    Loads the Mistral 7B Instruct v0.2 model and tokenizer.
-    Caches the model to prevent re-loading on every rerun.
-    """
-    # Pass the HF_TOKEN to from_pretrained calls
     tokenizer = AutoTokenizer.from_pretrained(
         "mistralai/Mistral-7B-Instruct-v0.2",
         use_fast=True,
         cache_dir=CACHE_DIR,
-        token=HF_TOKEN # Pass the token here
+        token=HF_TOKEN
     )
     model = AutoModelForCausalLM.from_pretrained(
         "mistralai/Mistral-7B-Instruct-v0.2",
         torch_dtype=torch.float16,
         device_map="auto",
         cache_dir=CACHE_DIR,
-        token=HF_TOKEN # Pass the token here
+        token=HF_TOKEN
     )
     pipe = pipeline("text-generation", model=model, tokenizer=tokenizer, max_new_tokens=512)
     return HuggingFacePipeline(pipeline=pipe)
 
-# Load FAISS vector store
+# Upload PDF or TXT file
+uploaded_file = st.file_uploader("📁 Upload a PDF or TXT file", type=["pdf", "txt"])
+
 @st.cache_resource
-def load_faiss():
+def build_vectorstore(file):
+    # Load and chunk text
+    if file.name.endswith(".pdf"):
+        loader = PyPDFLoader(file_path=file.name)
+    else:
+        loader = TextLoader(file_path=file.name, encoding="utf-8")
+
+    docs = loader.load()
+    splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
+    chunks = splitter.split_documents(docs)
+
+    # Generate embeddings
     embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
-    # Ensure faiss_index directory exists and its contents are deployed with your app
-    # This path is relative to your app's root directory in Streamlit Cloud
+    vectorstore = FAISS.from_documents(chunks, embeddings)
+    vectorstore.save_local("faiss_index")
+    return vectorstore
+
+@st.cache_resource
+def load_vectorstore():
+    embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
     return FAISS.load_local("faiss_index", embeddings, allow_dangerous_deserialization=True)
 
-# Initialize components
+# MAIN
+if uploaded_file is not None:
+    with st.spinner("Building vector store from uploaded document..."):
+        vectorstore = build_vectorstore(uploaded_file)
+else:
+    with st.spinner("Loading existing FAISS vector store..."):
+        vectorstore = load_vectorstore()
+
+retriever = vectorstore.as_retriever()
 llm = load_model()
-retriever = load_faiss().as_retriever()
 memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
 
 qa_chain = ConversationalRetrievalChain.from_llm(
@@ -64,7 +83,6 @@ qa_chain = ConversationalRetrievalChain.from_llm(
     verbose=False
 )
 
-# Chat interface
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 
@@ -77,7 +95,6 @@ if user_question:
 
     st.session_state.chat_history.append((user_question, answer))
 
-# Display chat history
-for i, (q, a) in enumerate(st.session_state.chat_history):
+for q, a in st.session_state.chat_history:
     st.chat_message("user").markdown(f"**You:** {q}")
     st.chat_message("assistant").markdown(f"**AI:** {a}")
