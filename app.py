@@ -42,22 +42,34 @@ def load_model():
 uploaded_file = st.file_uploader("📁 Upload a PDF or TXT file", type=["pdf", "txt"])
 
 @st.cache_resource
-def build_vectorstore(file):
-    # Load and chunk text
-    if file.name.endswith(".pdf"):
-        loader = PyPDFLoader(file_path=file.name)
+#dfrom langchain_community.document_loaders import PyPDFLoader, TextLoader
+
+def build_vectorstore(uploaded_file):
+    # Save uploaded file to disk
+    file_path = os.path.join("/tmp", uploaded_file.name)
+    with open(file_path, "wb") as f:
+        f.write(uploaded_file.getbuffer())
+
+    # Choose loader based on file type
+    if uploaded_file.name.endswith(".pdf"):
+        loader = PyPDFLoader(file_path)
+    elif uploaded_file.name.endswith(".txt"):
+        loader = TextLoader(file_path)
     else:
-        loader = TextLoader(file_path=file.name, encoding="utf-8")
+        raise ValueError("Unsupported file type. Please upload a .pdf or .txt file.")
 
     docs = loader.load()
-    splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
+    
+    # Split into chunks
+    from langchain.text_splitter import RecursiveCharacterTextSplitter
+    splitter = RecursiveCharacterTextSplitter(chunk_size=512, chunk_overlap=64)
     chunks = splitter.split_documents(docs)
 
-    # Generate embeddings
+    # Embed & store
     embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
     vectorstore = FAISS.from_documents(chunks, embeddings)
-    vectorstore.save_local("faiss_index")
     return vectorstore
+    
 
 @st.cache_resource
 def load_vectorstore():
