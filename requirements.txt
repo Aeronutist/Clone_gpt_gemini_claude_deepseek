@@ -5,3 +5,4 @@ faiss-cpu
 streamlit
 langchain-community 
 langchain
+accelerate 
