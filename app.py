@@ -1,4 +1,4 @@
-import streamlit as st
+ import streamlit as st
 from transformers import pipeline, AutoTokenizer, AutoModelForCausalLM
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import HuggingFaceEmbeddings
